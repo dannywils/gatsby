@@ -121,7 +121,14 @@ export default (locals, callback) => {
     createElement(Route, {
       // eslint-disable-next-line react/display-name
       render: routeProps => {
-        const page = getPage(routeProps.location.pathname)
+        const pagePath = urlJoin(pathPrefix, routeProps.location.pathname)
+        const page = getPage(pagePath || `/`)
+
+        if (!page) {
+          console.log("NO PAGE FOR", pagePath, routeProps)
+          return null
+        }
+
         const layout = getLayout(page)
         return createElement(withRouter(layout), {
           // eslint-disable-next-line react/display-name

@@ -91,6 +91,7 @@ exports.sourceNodes = async (
     store,
     cache,
     createNode,
+    createNodeId,
     _auth,
   })
 

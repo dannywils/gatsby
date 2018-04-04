@@ -12,7 +12,7 @@ const cacheId = url => `create-remote-file-node-${url}`
  */
 const processingCache = {}
 
-module.exports = ({ url, store, cache, createNode, auth = {} }) => {
+module.exports = ({ url, store, cache, createNode, createNodeId, auth = {} }) => {
   // Check if we already requested node for this remote file
   // and return stored promise if we did.
   if (processingCache[url]) {
@@ -101,7 +101,7 @@ module.exports = ({ url, store, cache, createNode, auth = {} }) => {
       }
 
       // Create the file node and return.
-      createFileNode(filename, {}).then(fileNode => {
+      createFileNode(filename, createNodeId, {}).then(fileNode => {
         // Override the default plugin as gatsby-source-filesystem needs to
         // be the owner of File nodes or there'll be conflicts if any other
         // File nodes are created through normal usages of

@@ -384,6 +384,7 @@ exports.downloadMediaFiles = async ({
   store,
   cache,
   createNode,
+  createNodeId,
   _auth,
 }) =>
   Promise.all(
@@ -396,6 +397,7 @@ exports.downloadMediaFiles = async ({
             store,
             cache,
             createNode,
+            createNodeId,
             auth: _auth,
           })
         } catch (e) {
