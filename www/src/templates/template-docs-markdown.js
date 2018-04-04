@@ -1,8 +1,8 @@
 import React from "react"
 import Helmet from "react-helmet"
-import GithubIcon from "react-icons/lib/go/mark-github"
 
-import { rhythm } from "../utils/typography"
+import MarkdownPageFooter from "../components/markdown-page-footer"
+
 import Container from "../components/container"
 
 class DocsTemplate extends React.Component {
@@ -20,12 +20,15 @@ class DocsTemplate extends React.Component {
           <meta name="twitter.label1" content="Reading time" />
           <meta name="twitter:data1" content={`${page.timeToRead} min read`} />
         </Helmet>
-        <h1 css={{ marginTop: 0 }}>{page.frontmatter.title}</h1>
+        <h1 id={page.fields.anchor} css={{ marginTop: 0 }}>
+          {page.frontmatter.title}
+        </h1>
         <div
           dangerouslySetInnerHTML={{
             __html: page.html,
           }}
         />
+        <MarkdownPageFooter page={page} />
       </Container>
     )
   }
@@ -39,9 +42,14 @@ export const pageQuery = graphql`
       html
       excerpt
       timeToRead
+      fields {
+        slug
+        anchor
+      }
       frontmatter {
         title
       }
+      ...MarkdownPageFooter
     }
   }
 `

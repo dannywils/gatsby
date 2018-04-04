@@ -18,18 +18,19 @@ let _auth
 let _perPage
 
 exports.sourceNodes = async (
-  { boundActionCreators, getNode, store, cache },
+  { actions, getNode, store, cache, createNodeId },
   {
     baseUrl,
     protocol,
     hostingWPCOM,
     useACF = true,
-    auth,
+    auth = {},
     verboseOutput,
     perPage = 100,
+    searchAndReplaceContentUrls = {},
   }
 ) => {
-  const { createNode } = boundActionCreators
+  const { createNode } = actions
   _verbose = verboseOutput
   _siteURL = `${protocol}://${baseUrl}`
   _useACF = useACF
@@ -51,6 +52,9 @@ exports.sourceNodes = async (
 
   // Normalize data & create nodes
 
+  // Remove ACF key if it's not an object
+  entities = normalize.normalizeACF(entities)
+
   // Creates entities from object collections of entities
   entities = normalize.normalizeEntities(entities)
 
@@ -67,7 +71,7 @@ exports.sourceNodes = async (
   entities = normalize.excludeUnknownEntities(entities)
 
   // Creates Gatsby IDs for each entity
-  entities = normalize.createGatsbyIds(entities)
+  entities = normalize.createGatsbyIds(createNodeId, entities)
 
   // Creates links between authors and user entities
   entities = normalize.mapAuthorsToUsers(entities)
@@ -87,6 +91,13 @@ exports.sourceNodes = async (
     store,
     cache,
     createNode,
+    _auth,
+  })
+
+  // Search and replace Content Urls
+  entities = normalize.searchReplaceContentUrls({
+    entities,
+    searchAndReplaceContentUrls,
   })
 
   // creates nodes for each entry

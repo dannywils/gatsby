@@ -10,12 +10,12 @@ const digest = str =>
 const propsId = (parentId, name) => `${parentId}--ComponentProp-${name}`
 const descId = parentId => `${parentId}--ComponentDescription`
 
-function createDescriptionNode(node, entry, boundActionCreators) {
+function createDescriptionNode(node, entry, actions, createNodeId) {
   if (!entry.description) return node
-  const { createNode } = boundActionCreators
+  const { createNode } = actions
 
   const descriptionNode = {
-    id: descId(node.id),
+    id: createNodeId(descId(node.id)),
     parent: node.id,
     children: [],
     text: entry.description,
@@ -34,8 +34,8 @@ function createDescriptionNode(node, entry, boundActionCreators) {
   return node
 }
 
-function createPropNodes(node, component, boundActionCreators) {
-  const { createNode } = boundActionCreators
+function createPropNodes(node, component, actions, createNodeId) {
+  const { createNode } = actions
   let children = new Array(component.props.length)
 
   component.props.forEach((prop, i) => {
@@ -44,7 +44,7 @@ function createPropNodes(node, component, boundActionCreators) {
 
     let propNode = {
       ...prop,
-      id: propNodeId,
+      id: createNodeId(propNodeId),
       children: [],
       parent: node.id,
       parentType: prop.type,
@@ -54,7 +54,7 @@ function createPropNodes(node, component, boundActionCreators) {
       },
     }
     children[i] = propNode.id
-    propNode = createDescriptionNode(propNode, prop, boundActionCreators)
+    propNode = createDescriptionNode(propNode, prop, actions, createNodeId)
     createNode(propNode)
   })
 
@@ -64,12 +64,16 @@ function createPropNodes(node, component, boundActionCreators) {
 }
 
 export default function onCreateNode(
-  { node, loadNodeContent, boundActionCreators },
+  { node, loadNodeContent, actions, createNodeId },
   pluginOptions
 ) {
-  const { createNode, createParentChildLink } = boundActionCreators
+  const { createNode, createParentChildLink } = actions
 
-  if (node.internal.mediaType !== `application/javascript`) return null
+  if (
+    node.internal.mediaType !== `application/javascript` &&
+    node.internal.mediaType !== `text/jsx`
+  )
+    return null
 
   return loadNodeContent(node)
     .then(content => {
@@ -83,7 +87,7 @@ export default function onCreateNode(
         let metadataNode = {
           ...component,
           props: null, // handled by the prop node creation
-          id: nodeId,
+          id: createNodeId(nodeId),
           children: [],
           parent: node.id,
           internal: {
@@ -96,12 +100,14 @@ export default function onCreateNode(
         metadataNode = createPropNodes(
           metadataNode,
           component,
-          boundActionCreators
+          actions,
+          createNodeId
         )
         metadataNode = createDescriptionNode(
           metadataNode,
           component,
-          boundActionCreators
+          actions,
+          createNodeId
         )
         createNode(metadataNode)
       })

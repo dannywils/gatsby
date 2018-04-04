@@ -9,8 +9,8 @@ const crypto = require(`crypto`)
 // called after the Gatsby bootstrap is finished so you have
 // access to any information necessary to programatically
 // create pages.
-exports.createPages = ({ graphql, boundActionCreators }) => {
-  const { createPage } = boundActionCreators
+exports.createPages = ({ graphql, actions }) => {
+  const { createPage } = actions
   return new Promise((resolve, reject) => {
     // The “graphql” function allows us to run arbitrary
     // queries against the local Drupal graphql schema. Think of
@@ -18,17 +18,17 @@ exports.createPages = ({ graphql, boundActionCreators }) => {
     // from the fetched data that you can run queries against.
     graphql(
       `
-      {
-        allAsciidoc(limit: 1000) {
-          edges {
-            node {
-              id
-              slug
+        {
+          allAsciidoc(limit: 1000) {
+            edges {
+              node {
+                id
+                slug
+              }
             }
           }
         }
-      }
-    `
+      `
     ).then(result => {
       if (result.errors) {
         reject(result.errors)
@@ -59,16 +59,15 @@ exports.createPages = ({ graphql, boundActionCreators }) => {
   })
 }
 
-exports.onCreateNode = async ({
-  node,
-  boundActionCreators,
-  loadNodeContent,
-}) => {
-  const { createNode, createParentChildLink } = boundActionCreators
+exports.onCreateNode = async ({ node, actions, loadNodeContent }) => {
+  const { createNode, createParentChildLink } = actions
   if (node.extension === `adoc`) {
     const content = await loadNodeContent(node)
     const html = asciidoc.convert(content)
-    const contentDigest = crypto.createHash(`md5`).update(html).digest(`hex`)
+    const contentDigest = crypto
+      .createHash(`md5`)
+      .update(html)
+      .digest(`hex`)
     const slug = `/${path.parse(node.relativePath).name}/`
     const asciiNode = {
       id: `${node.id} >>> ASCIIDOC`,

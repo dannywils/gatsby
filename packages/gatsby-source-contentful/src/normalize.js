@@ -12,12 +12,12 @@ const typePrefix = `Contentful`
 const makeTypeName = type => _.upperFirst(_.camelCase(`${typePrefix} ${type}`))
 
 const getLocalizedField = ({ field, defaultLocale, locale }) => {
-  if (field[locale.code]) {
+  if (!_.isUndefined(field[locale.code])) {
     return field[locale.code]
-  } else if (field[locale.fallbackCode]) {
+  } else if (!_.isUndefined(field[locale.fallbackCode])) {
     return field[locale.fallbackCode]
   } else {
-    return field[defaultLocale]
+    return null
   }
 }
 
@@ -39,8 +39,17 @@ const fixId = id => {
 }
 exports.fixId = fixId
 
-exports.fixIds = object =>
-  deepMap(object, (v, k) => (k === `id` ? fixId(v) : v))
+exports.fixIds = object => {
+  const out = deepMap(object, (v, k) => (k === `id` ? fixId(v) : v))
+
+  return {
+    ...out,
+    sys: {
+      ...out.sys,
+      contentful_id: object.sys.id,
+    },
+  }
+}
 
 const makeId = ({ id, currentLocale, defaultLocale }) =>
   currentLocale === defaultLocale ? id : `${id}___${currentLocale}`
@@ -140,10 +149,10 @@ exports.buildForeignReferenceMap = ({
   return foreignReferenceMap
 }
 
-function createTextNode(node, key, text, createNode) {
+function createTextNode(node, key, text, createNode, createNodeId) {
   const str = _.isString(text) ? text : ` `
   const textNode = {
-    id: `${node.id}${key}TextNode`,
+    id: createNodeId(`${node.id}${key}TextNode`),
     parent: node.id,
     children: [],
     [key]: str,
@@ -162,12 +171,35 @@ function createTextNode(node, key, text, createNode) {
 }
 exports.createTextNode = createTextNode
 
+function createJSONNode(node, key, content, createNode, createNodeId) {
+  const str = JSON.stringify(content)
+  const JSONNode = {
+    ...content,
+    id: createNodeId(`${node.id}${key}JSONNode`),
+    parent: node.id,
+    children: [],
+    internal: {
+      type: _.camelCase(`${node.internal.type} ${key} JSONNode`),
+      mediaType: `application/json`,
+      content: str,
+      contentDigest: digest(str),
+    },
+  }
+
+  node.children = node.children.concat([JSONNode.id])
+  createNode(JSONNode)
+
+  return JSONNode.id
+}
+exports.createJSONNode = createJSONNode
+
 exports.createContentTypeNodes = ({
   contentTypeItem,
   restrictedNodeFields,
   conflictFieldPrefix,
   entries,
   createNode,
+  createNodeId,
   resolvable,
   foreignReferenceMap,
   defaultLocale,
@@ -225,12 +257,13 @@ exports.createContentTypeNodes = ({
             entryItemFieldValue &&
             entryItemFieldValue.sys &&
             entryItemFieldValue.sys.type &&
-            entryItemFieldValue.sys.id &&
-            resolvable.has(entryItemFieldValue.sys.id)
+            entryItemFieldValue.sys.id
           ) {
-            entryItemFields[`${entryItemFieldKey}___NODE`] = mId(
-              entryItemFieldValue.sys.id
-            )
+            if (resolvable.has(entryItemFieldValue.sys.id)) {
+              entryItemFields[`${entryItemFieldKey}___NODE`] = mId(
+                entryItemFieldValue.sys.id
+              )
+            }
             delete entryItemFields[entryItemFieldKey]
           }
         }
@@ -254,7 +287,10 @@ exports.createContentTypeNodes = ({
       }
 
       let entryNode = {
-        id: mId(entryItem.sys.id),
+        id: createNodeId(mId(entryItem.sys.id)),
+        contentful_id: entryItem.sys.contentful_id,
+        createdAt: entryItem.sys.createdAt,
+        updatedAt: entryItem.sys.updatedAt,
         parent: contentTypeItemId,
         children: [],
         internal: {
@@ -293,7 +329,18 @@ exports.createContentTypeNodes = ({
             entryNode,
             entryItemFieldKey,
             entryItemFields[entryItemFieldKey],
-            createNode
+            createNode,
+            createNodeId
+          )
+
+          delete entryItemFields[entryItemFieldKey]
+        } else if (fieldType === `Object`) {
+          entryItemFields[`${entryItemFieldKey}___NODE`] = createJSONNode(
+            entryNode,
+            entryItemFieldKey,
+            entryItemFields[entryItemFieldKey],
+            createNode,
+            createNodeId
           )
 
           delete entryItemFields[entryItemFieldKey]
@@ -312,7 +359,7 @@ exports.createContentTypeNodes = ({
 
     // Create a node for each content type
     const contentTypeNode = {
-      id: contentTypeItemId,
+      id: createNodeId(contentTypeItemId),
       parent: null,
       children: [],
       name: contentTypeItem.name,
@@ -338,6 +385,7 @@ exports.createContentTypeNodes = ({
 exports.createAssetNodes = ({
   assetItem,
   createNode,
+  createNodeId,
   defaultLocale,
   locales,
 }) => {
@@ -350,7 +398,9 @@ exports.createAssetNodes = ({
     //
     // Get localized fields.
     localizedAsset.fields = {
-      file: getField(localizedAsset.fields.file),
+      file: localizedAsset.fields.file
+        ? getField(localizedAsset.fields.file)
+        : null,
       title: localizedAsset.fields.title
         ? getField(localizedAsset.fields.title)
         : ``,
@@ -359,7 +409,7 @@ exports.createAssetNodes = ({
         : ``,
     }
     const assetNode = {
-      id: mId(localizedAsset.sys.id),
+      id: createNodeId(mId(localizedAsset.sys.id)),
       parent: null,
       children: [],
       ...localizedAsset.fields,

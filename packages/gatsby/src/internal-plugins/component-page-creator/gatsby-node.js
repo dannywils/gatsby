@@ -14,23 +14,20 @@ const validatePath = require(`./validate-path`)
 // algorithm is glob /pages directory for js/jsx/cjsx files *not*
 // underscored. Then create url w/ our path algorithm *unless* user
 // takes control of that page component in gatsby-node.
-exports.createPagesStatefully = async (
-  { store, boundActionCreators },
-  options,
-  doneCb
-) => {
-  const { createPage, deletePage } = boundActionCreators
+exports.createPagesStatefully = async ({ store, actions }, options, doneCb) => {
+  const { createPage, deletePage } = actions
   const program = store.getState().program
-  const pagesDirectory = systemPath.posix.join(program.directory, `/src/pages`)
   const exts = program.extensions.map(e => `${e.slice(1)}`).join(`,`)
+  const pagesDirectory = systemPath.posix.join(program.directory, `/src/pages`)
+  const pagesGlob = `${pagesDirectory}/**/*.{${exts}}`
 
   // Get initial list of files.
-  let files = await glob(`${pagesDirectory}/**/?(${exts})`)
+  let files = await glob(pagesGlob)
   files.forEach(file => _createPage(file, pagesDirectory, createPage))
 
   // Listen for new component pages to be added or removed.
   chokidar
-    .watch(`${pagesDirectory}/**/*.{${exts}}`)
+    .watch(pagesGlob)
     .on(`add`, path => {
       if (!_.includes(files, path)) {
         _createPage(path, pagesDirectory, createPage)
@@ -43,7 +40,10 @@ exports.createPagesStatefully = async (
         .getState()
         .pages.filter(p => p.component === path)
         .forEach(page => {
-          deletePage({ path: page.path })
+          deletePage({
+            path: createPath(pagesDirectory, path),
+            component: path,
+          })
           files = files.filter(f => f !== path)
         })
     })

@@ -13,13 +13,16 @@ const readFile = file =>
   })
 
 describe(`transformer-react-doc-gen: onCreateNode`, () => {
-  let loadNodeContent, boundActionCreators, node, createdNodes, updatedNodes
+  let loadNodeContent, actions, node, createdNodes, updatedNodes
+  const createNodeId = jest.fn()
+  createNodeId.mockReturnValue(`uuid-from-gatsby`)
   let run = (node, opts = {}) =>
     onCreateNode(
       {
         node,
         loadNodeContent,
-        boundActionCreators,
+        actions,
+        createNodeId,
       },
       opts
     )
@@ -36,21 +39,22 @@ describe(`transformer-react-doc-gen: onCreateNode`, () => {
       __fixture: `classes.js`,
     }
     loadNodeContent = jest.fn(node => readFile(node.__fixture))
-    boundActionCreators = {
+    actions = {
       createNode: jest.fn(n => createdNodes.push(n)),
       createParentChildLink: jest.fn(n => updatedNodes.push(n)),
     }
   })
 
-  it(`should only process javascript nodes`, () => {
+  it(`should only process javascript and jsx nodes`, () => {
     loadNodeContent = jest.fn(() => new Promise(() => {}))
 
     expect(run({ internal: { mediaType: `text/x-foo` } })).toBeNull()
     expect(
       run({ internal: { mediaType: `application/javascript` } })
     ).toBeDefined()
+    expect(run({ internal: { mediaType: `text/jsx` } })).toBeDefined()
 
-    expect(loadNodeContent.mock.calls).toHaveLength(1)
+    expect(loadNodeContent.mock.calls).toHaveLength(2)
   })
 
   it(`should extract all components in a file`, async () => {
@@ -82,6 +86,19 @@ describe(`transformer-react-doc-gen: onCreateNode`, () => {
     expect(types.ComponentProp).toHaveLength(14)
   })
 
+  it(`should delicately remove doclets`, async () => {
+    await run(node)
+
+    let types = groupBy(createdNodes, `internal.type`)
+    expect(types.ComponentProp[0].description).toEqual(
+      `An object hash of field (fix this @mention?) errors for the form.`
+    )
+    expect(types.ComponentProp[0].doclets).toEqual({
+      type: `{Foo}`,
+      default: `blue`,
+    })
+  })
+
   it(`should extract create description nodes with markdown types`, async () => {
     await run(node)
     let types = groupBy(createdNodes, `internal.type`)
@@ -99,5 +116,17 @@ describe(`transformer-react-doc-gen: onCreateNode`, () => {
     })
 
     expect(!!handler.mock.calls.length).toBe(true)
+  })
+
+  describe(`flowTypes`, () => {
+    beforeEach(() => {
+      node.__fixture = `flow.js`
+    })
+    it(`should add flow type info`, async () => {
+      await run(node)
+      expect(createdNodes[1].flowType).toEqual({
+        name: `number`,
+      })
+    })
   })
 })

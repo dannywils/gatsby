@@ -1,31 +1,42 @@
 {
   "name": "gatsby-plugin-react-css-modules",
-  "version": "2.0.0-alpha.1",
   "description": "Gatsby plugin that transforms styleName to className using compile time CSS module resolution",
-  "main": "index.js",
-  "scripts": {
-    "build": "babel src --out-dir . --ignore __tests__",
-    "watch": "babel -w src --out-dir . --ignore __tests__",
-    "prepublish": "cross-env NODE_ENV=production npm run build"
+  "version": "2.0.0-alpha.4",
+  "author": "Ming Aldrich-Gan <mingaldrichgan@gmail.com>",
+  "bugs": {
+    "url": "https://github.com/gatsbyjs/gatsby/issues"
   },
+  "dependencies": {
+    "@babel/runtime": "^7.0.0-beta.42",
+    "babel-plugin-react-css-modules": "^3.2.1"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.0.0-beta.42",
+    "@babel/core": "^7.0.0-beta.42",
+    "cross-env": "^5.1.4"
+  },
+  "homepage": "https://github.com/gatsbyjs/gatsby/tree/master/packages/gatsby-plugin-react-css-modules#readme",
   "keywords": [
+    "babel",
+    "babel-plugin",
+    "className",
+    "css modules",
     "gatsby",
     "gatsby-plugin",
     "babel",
     "babel-plugin",
     "react",
-    "css modules",
-    "styleName",
-    "className"
+    "styleName"
   ],
-  "author": "Ming Aldrich-Gan <mingaldrichgan@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "babel-plugin-react-css-modules": "^3.2.1",
-    "babel-runtime": "^6.26.0"
+  "main": "index.js",
+  "peerDependencies": {
+    "gatsby": "^2.0.0"
   },
-  "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "cross-env": "^5.0.5"
+  "repository": "https://github.com/gatsbyjs/gatsby/tree/master/packages/gatsby-plugin-react-css-modules",
+  "scripts": {
+    "build": "babel src --out-dir . --ignore __tests__",
+    "prepublish": "cross-env NODE_ENV=production npm run build",
+    "watch": "babel -w src --out-dir . --ignore __tests__"
   }
 }

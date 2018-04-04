@@ -1,5 +1,5 @@
 import React from "react"
-import Link from "gatsby-link"
+import { Link } from "gatsby"
 import kebabCase from "lodash/kebabCase"
 
 class TagsPageRoute extends React.Component {
@@ -39,7 +39,7 @@ export const pageQuery = graphql`
     }
     allMarkdownRemark(
       limit: 2000
-      filter: { frontmatter: { draft: { ne: true } } }
+      filter: { frontmatter: { draft: { ne: true }, example: { ne: true } } }
     ) {
       group(field: frontmatter___tags) {
         fieldValue

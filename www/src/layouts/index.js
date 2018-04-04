@@ -6,10 +6,10 @@ import MobileNavigation from "../components/navigation-mobile"
 import SidebarBody from "../components/sidebar-body"
 import tutorialSidebar from "../pages/docs/tutorial-links.yml"
 import docsSidebar from "../pages/docs/doc-links.yaml"
+import featuresSidebar from "../pages/docs/features-links.yaml"
 import { rhythm, scale } from "../utils/typography"
-import presets from "../utils/presets"
-import colors from "../utils/colors"
-
+import presets, { colors } from "../utils/presets"
+import hex2rgba from "hex2rgba"
 import "../css/prism-coy.css"
 
 // Import Futura PT typeface
@@ -28,35 +28,52 @@ class DefaultLayout extends React.Component {
     const hasSidebar =
       this.props.location.pathname.slice(0, 6) === `/docs/` ||
       this.props.location.pathname.slice(0, 10) === `/packages/` ||
-      this.props.location.pathname.slice(0, 10) === `/tutorial/`
+      this.props.location.pathname.slice(0, 10) === `/tutorial/` ||
+      this.props.location.pathname.slice(0, 9) === `/features`
+    const isSearchSource = hasSidebar
     const sidebarStyles = {
-      borderRight: `1px solid ${colors.b[0]}`,
-      backgroundColor: presets.sidebar,
-      float: `left`,
+      borderRight: `1px solid ${colors.ui.light}`,
+      backgroundColor: colors.ui.whisper,
+      boxShadow: `inset 0 4px 5px 0 ${hex2rgba(
+        colors.gatsby,
+        presets.shadowKeyPenumbraOpacity
+      )}, inset 0 1px 10px 0 ${hex2rgba(
+        colors.lilac,
+        presets.shadowAmbientShadowOpacity
+      )}, inset 0 2px 4px -1px ${hex2rgba(
+        colors.lilac,
+        presets.shadowKeyUmbraOpacity
+      )}`,
       width: rhythm(10),
       display: `none`,
       position: `fixed`,
+      top: `calc(${presets.headerHeight} - 1px)`,
       overflowY: `auto`,
-      height: `calc(100vh - ${presets.headerHeight})`,
+      height: `calc(100vh - ${presets.headerHeight} + 1px)`,
       WebkitOverflowScrolling: `touch`,
       "::-webkit-scrollbar": {
         width: `6px`,
         height: `6px`,
       },
       "::-webkit-scrollbar-thumb": {
-        background: presets.lightPurple,
+        background: colors.ui.bright,
       },
       "::-webkit-scrollbar-track": {
-        background: presets.brandLighter,
+        background: colors.ui.light,
+      },
+      [presets.Desktop]: {
+        width: rhythm(12),
+        padding: rhythm(1),
       },
     }
 
     return (
-      <div>
+      <div className={isHomepage ? `is-homepage` : ``}>
         <Helmet defaultTitle={`GatsbyJS`} titleTemplate={`%s | GatsbyJS`}>
           <meta name="twitter:site" content="@gatsbyjs" />
           <meta name="og:type" content="website" />
           <meta name="og:site_name" content="GatsbyJS" />
+          <html lang="en" />
         </Helmet>
         <Navigation pathname={this.props.location.pathname} />
         <div
@@ -102,10 +119,27 @@ class DefaultLayout extends React.Component {
           </div>
           <div
             css={{
+              ...sidebarStyles,
+              [presets.Tablet]: {
+                display:
+                  this.props.location.pathname.slice(0, 9) === `/features`
+                    ? `block`
+                    : `none`,
+              },
+            }}
+          >
+            <SidebarBody yaml={featuresSidebar} />
+          </div>
+          <div
+            css={{
               [presets.Tablet]: {
                 paddingLeft: hasSidebar ? rhythm(10) : 0,
               },
+              [presets.Desktop]: {
+                paddingLeft: hasSidebar ? rhythm(12) : 0,
+              },
             }}
+            className={isSearchSource && `docSearch-content`}
           >
             {this.props.children()}
           </div>
@@ -116,4 +150,4 @@ class DefaultLayout extends React.Component {
   }
 }
 
-module.exports = DefaultLayout
+export default DefaultLayout

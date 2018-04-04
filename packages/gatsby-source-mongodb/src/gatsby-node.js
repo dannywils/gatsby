@@ -4,11 +4,11 @@ const createMappingChildNodes = require(`./mapping`)
 const _ = require(`lodash`)
 
 exports.sourceNodes = (
-  { boundActionCreators, getNode, hasNodeChanged },
+  { actions, getNode, createNodeId, hasNodeChanged },
   pluginOptions,
   done
 ) => {
-  const { createNode } = boundActionCreators
+  const { createNode } = actions
 
   let serverOptions = pluginOptions.server || {
     address: `localhost`,
@@ -20,7 +20,9 @@ exports.sourceNodes = (
     authUrlPart = `${pluginOptions.auth.user}:${pluginOptions.auth.password}@`
 
   MongoClient.connect(
-    `mongodb://${authUrlPart}${serverOptions.address}:${serverOptions.port}/${dbName}`,
+    `mongodb://${authUrlPart}${serverOptions.address}:${
+      serverOptions.port
+    }/${dbName}`,
     function(err, db) {
       // Establish connection to db
       if (err) {
@@ -30,10 +32,26 @@ exports.sourceNodes = (
       let collection = pluginOptions.collection || `documents`
       if (_.isArray(collection)) {
         for (const col of collection) {
-          createNodes(db, pluginOptions, dbName, createNode, col, done)
+          createNodes(
+            db,
+            pluginOptions,
+            dbName,
+            createNode,
+            createNodeId,
+            col,
+            done
+          )
         }
       } else {
-        createNodes(db, pluginOptions, dbName, createNode, collection, done)
+        createNodes(
+          db,
+          pluginOptions,
+          dbName,
+          createNode,
+          createNodeId,
+          collection,
+          done
+        )
       }
     }
   )
@@ -44,6 +62,7 @@ function createNodes(
   pluginOptions,
   dbName,
   createNode,
+  createNodeId,
   collectionName,
   done
 ) {
@@ -64,7 +83,7 @@ function createNodes(
       var node = {
         // Data for the node.
         ...item,
-        id: `${id}`,
+        id: createNodeId(`${id}`),
         parent: `__${collectionName}__`,
         children: [],
         internal: {

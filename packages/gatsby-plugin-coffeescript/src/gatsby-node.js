@@ -7,16 +7,14 @@ export function resolvableExtensions() {
   return [`.coffee`]
 }
 
-export function modifyWebpackConfig({ loaders, boundActionCreators }) {
-  const coffeeLoader = [loaders.js(), resolve(`coffee-loader`)]
-
+export function onCreateWebpackConfig({ loaders, actions }) {
   // We need to use Babel to get around the ES6 export issue.
-  boundActionCreators.setWebpackConfig({
+  actions.setWebpackConfig({
     module: {
       rules: [
         {
           test: COFFEE,
-          use: coffeeLoader,
+          use: [loaders.js(), resolve(`coffee-loader`)],
         },
       ],
     },

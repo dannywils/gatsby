@@ -12,26 +12,23 @@ const validatePath = require(`./validate-path`)
 // Auto-create layouts.
 // algorithm is glob /layouts directory for js/jsx/cjsx files *not*
 // underscored
-exports.createLayouts = async (
-  { store, boundActionCreators },
-  options,
-  doneCb
-) => {
-  const { createLayout, deleteLayout } = boundActionCreators
+exports.createLayouts = async ({ store, actions }, options, doneCb) => {
+  const { createLayout, deleteLayout } = actions
   const program = store.getState().program
+  const exts = program.extensions.map(e => `${e.slice(1)}`).join(`,`)
   const layoutDirectory = systemPath.posix.join(
     program.directory,
     `/src/layouts`
   )
-  const exts = program.extensions.map(e => `${e.slice(1)}`).join(`,`)
+  const layoutGlob = `${layoutDirectory}/**/*.{${exts}}`
 
   // Get initial list of files.
-  let files = await glob(`${layoutDirectory}/**/?(${exts})`)
+  let files = await glob(layoutGlob)
   files.forEach(file => _createLayout(file, layoutDirectory, createLayout))
 
   // Listen for new layouts to be added or removed.
   chokidar
-    .watch(`${layoutDirectory}/**/*.{${exts}}`)
+    .watch(layoutGlob)
     .on(`add`, path => {
       if (!_.includes(files, path)) {
         _createLayout(path, layoutDirectory, createLayout)

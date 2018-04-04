@@ -1,4 +1,5 @@
 import React from "react"
+import colors from "./utils/colors"
 
 let stylesStr
 if (process.env.NODE_ENV === `production`) {
@@ -23,7 +24,7 @@ export default class HTML extends React.Component {
     }
 
     return (
-      <html lang="en">
+      <html {...this.props.htmlAttributes}>
         <head>
           <link
             rel="preload"
@@ -33,7 +34,7 @@ export default class HTML extends React.Component {
           />
           <link
             rel="preload"
-            href="/static/spectral-latin-400.bc2de9de.woff2"
+            href="/static/spectral-latin-400.d9fdfd34.woff2"
             as="font"
             crossOrigin="anonymous"
           />
@@ -70,16 +71,22 @@ export default class HTML extends React.Component {
           <link
             rel="mask-icon"
             href={`/safari-pinned-tab.svg`}
-            color="#5bbad5"
+            color={colors.gatsby}
           />
+          <meta name="msapplication-config" content={`/browserconfig.xml`} />
+          <script src="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.js" />
           {css}
         </head>
-        <body>
+        <body {...this.props.bodyAttributes}>
           <div
             id="___gatsby"
             dangerouslySetInnerHTML={{ __html: this.props.body }}
           />
           {this.props.postBodyComponents}
+          <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.css"
+          />
         </body>
       </html>
     )

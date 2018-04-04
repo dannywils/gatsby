@@ -23,7 +23,9 @@ describe(`Process WordPress data`, () => {
     entities = normalize.excludeUnknownEntities(entities)
   })
   it(`creates Gatsby IDs for each entity`, () => {
-    entities = normalize.createGatsbyIds(entities)
+    const createNodeId = jest.fn()
+    createNodeId.mockReturnValue(`uuid-from-gatsby`)
+    entities = normalize.createGatsbyIds(createNodeId, entities)
     expect(entities).toMatchSnapshot()
   })
   it(`Creates map of types`, () => {
@@ -47,6 +49,13 @@ describe(`Process WordPress data`, () => {
   it(`Creates links from entities to media nodes`, () => {
     entities = normalize.mapEntitiesToMedia(entities)
     expect(entities).toMatchSnapshot()
+  })
+  it(`Removes the acf key when acf is not an object`, () => {
+    let dummyEntities = [{ id: 1, acf: false }, { id: 2, acf: {} }]
+    expect(normalize.normalizeACF(dummyEntities)).toEqual([
+      { id: 1 },
+      { id: 2, acf: {} },
+    ])
   })
 
   // Actually let's not test this since it's a bit tricky to mock

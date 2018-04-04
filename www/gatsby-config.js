@@ -56,8 +56,8 @@ module.exports = {
           },
           `gatsby-remark-prismjs`,
           `gatsby-remark-copy-linked-files`,
-          `gatsby-remark-smartypants`,
           `gatsby-remark-autolink-headers`,
+          `gatsby-remark-smartypants`,
         ],
       },
     },
@@ -79,8 +79,8 @@ module.exports = {
         name: `GatsbyJS`,
         short_name: `GatsbyJS`,
         start_url: `/`,
-        background_color: `#f7f0eb`,
-        theme_color: `#5c2965`,
+        background_color: `#ffffff`,
+        theme_color: `#663399`,
         display: `minimal-ui`,
         icons: [
           {
@@ -103,6 +103,7 @@ module.exports = {
         navigateFallbackWhitelist: [],
       },
     },
+    `gatsby-transformer-csv`,
     `gatsby-plugin-twitter`,
     `gatsby-plugin-react-helmet`,
     {
@@ -123,7 +124,7 @@ module.exports = {
                   sort: { order: DESC, fields: [frontmatter___date] }
                   filter: {
                     frontmatter: { draft: { ne: true } }
-                    fileAbsolutePath: { regex: "/blog/" }
+                    fileAbsolutePath: { regex: "/docs.blog/" }
                   }
                 ) {
                   edges {

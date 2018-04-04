@@ -1,5 +1,5 @@
 import React from "react"
-import Link from "gatsby-link"
+import { Link } from "gatsby"
 
 class IndexPage extends React.Component {
   render() {
@@ -7,13 +7,11 @@ class IndexPage extends React.Component {
     return (
       <div>
         <ul>
-          {this.props.data.allAsciidoc.edges.map(({ node }) =>
+          {this.props.data.allAsciidoc.edges.map(({ node }) => (
             <li>
-              <Link to={node.slug}>
-                {node.slug}
-              </Link>
+              <Link to={node.slug}>{node.slug}</Link>
             </li>
-          )}
+          ))}
         </ul>
       </div>
     )

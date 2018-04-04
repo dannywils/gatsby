@@ -1,4 +1,5 @@
-import presets from "../utils/presets"
+import React from "react"
+import presets, { colors } from "../utils/presets"
 import { rhythm, scale, options } from "../utils/typography"
 import { vP, vPHd, vPVHd, vPVVHd } from "../components/gutters"
 
@@ -31,7 +32,7 @@ const MastheadBg = () => (
         right: `auto`,
         width: vPOff,
         zIndex: -10,
-        background: presets.brandLighter,
+        background: colors.ui.light,
         [presets.Hd]: {
           width: vPHdOff,
         },
@@ -64,12 +65,12 @@ const MastheadBg = () => (
         height: `100%`,
       }}
     >
-      <polygon fill={presets.brandLighter} points="-5,-5 15,15 -5,15 " />
+      <polygon fill={colors.ui.light} points="-5,-5 15,15 -5,15 " />
     </svg>
     <style>
       {`
           .masthead-bg-right-light {
-            fill: ${presets.brand};
+            fill: ${colors.gatsby};
           }
           @media (max-width: 650px),
           (max-width: 768px) and (orientation:portrait) {
@@ -94,7 +95,7 @@ const MastheadBg = () => (
             }
 
             .masthead-bg-right-light {
-              fill: ${presets.brandLight};
+              fill: ${colors.lilac};
             }
           }
           ${presets.Hd}  {
@@ -128,14 +129,14 @@ const MastheadBg = () => (
           className="masthead-bg-right-light"
           width="10000%"
           height="10000%"
-          fill={presets.brandLight}
+          fill={colors.lilac}
           transform="rotate(45 100 50) translate(0 0)"
         />
         <rect
           className="masthead-bg-left-dark"
           width="10000%"
           height="10000%"
-          fill={presets.brand}
+          fill={colors.gatsby}
           transform="rotate(45 100 50) translate(1.25 0)"
         />
         {/*<polygon fill="blue" points="0,10 10,0 10,10" />*/}

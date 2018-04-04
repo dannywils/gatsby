@@ -40,14 +40,14 @@ function transformPackageJson(json) {
   return json
 }
 
-exports.sourceNodes = ({ boundActionCreators, store }) => {
-  const { createNode } = boundActionCreators
+exports.sourceNodes = ({ actions, store }) => {
+  const { createNode } = actions
   const state = store.getState()
   const { program } = state
   const { flattenedPlugins } = state
 
   // Add our default development page since we know it's going to
-  // exist and we need a node to exist so it's query works :-)
+  // exist and we need a node to exist so its query works :-)
   const page = { path: `/dev-404-page/` }
   createNode({
     ...page,
@@ -122,21 +122,31 @@ exports.sourceNodes = ({ boundActionCreators, store }) => {
     `gatsby-config.js`
   )
   chokidar.watch(pathToGatsbyConfig).on(`change`, () => {
-    // Delete require cache so we can reload the module.
-    delete require.cache[require.resolve(pathToGatsbyConfig)]
-    const config = require(pathToGatsbyConfig)
-    createGatsbyConfigNode(config)
+    const oldCache = require.cache[require.resolve(pathToGatsbyConfig)]
+    try {
+      // Delete require cache so we can reload the module.
+      delete require.cache[require.resolve(pathToGatsbyConfig)]
+      const config = require(pathToGatsbyConfig)
+      createGatsbyConfigNode(config)
+    } catch (e) {
+      // Restore the old cache since requiring the new gatsby-config.js failed.
+      if (oldCache !== undefined) {
+        require.cache[require.resolve(pathToGatsbyConfig)] = oldCache
+      }
+    }
   })
 }
 
 const createPageId = path => `SitePage ${path}`
 
-exports.onCreatePage = ({ page, boundActionCreators }) => {
-  const { createNode } = boundActionCreators
+exports.onCreatePage = ({ page, actions }) => {
+  const { createNode } = actions
+  // eslint-disable-next-line
+  const { updatedAt, ...pageWithoutUpdated } = page
 
   // Add page.
   createNode({
-    ...page,
+    ...pageWithoutUpdated,
     id: createPageId(page.path),
     parent: `SOURCE`,
     children: [],

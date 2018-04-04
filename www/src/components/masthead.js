@@ -1,8 +1,9 @@
-import Link from "gatsby-link"
+import React from "react"
+import { Link } from "gatsby"
 import ArrowForwardIcon from "react-icons/lib/md/arrow-forward"
 
 import { rhythm, scale, options } from "../utils/typography"
-import presets from "../utils/presets"
+import presets, { colors } from "../utils/presets"
 import CtaButton from "./cta-button"
 import MastheadBg from "./masthead-bg"
 import FuturaParagraph from "./futura-paragraph"
@@ -17,8 +18,6 @@ const MastheadContent = () => (
       paddingTop: rhythm(4),
       paddingBottom: rhythm(1),
       paddingBottom: rhythm(1),
-      transition: `padding-top ${presets.animation.speedFast} ${presets
-        .animation.curveDefault}`,
       flexGrow: `0`,
       flexShrink: `1`,
       [presets.Mobile]: {
@@ -51,7 +50,7 @@ const MastheadContent = () => (
       <h1
         css={{
           ...scale(0.7),
-          color: presets.brand,
+          color: colors.gatsby,
           lineHeight: 1,
           margin: 0,
           marginBottom: `1.2em`,

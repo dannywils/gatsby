@@ -1,10 +1,8 @@
-jest.mock(`../resolve`, () => (
-  (module) => `/resolved/path/${module}`
-))
+jest.mock(`../resolve`, () => module => `/resolved/path/${module}`)
 
 const {
   resolvableExtensions,
-  modifyWebpackConfig,
+  onCreateWebpackConfig,
   preprocessSource,
 } = require(`../gatsby-node`)
 
@@ -14,17 +12,18 @@ describe(`gatsby-plugin-coffeescript`, () => {
   })
 
   it(`modifies webpack config with cofeescript extensions`, () => {
-    const boundActionCreators = {
+    const actions = {
       setWebpackConfig: jest.fn(),
     }
     const loaders = { js: () => `babel-loader` }
 
-    modifyWebpackConfig({ boundActionCreators, loaders })
+    onCreateWebpackConfig({ actions, loaders })
 
-    expect(boundActionCreators.setWebpackConfig)
-      .toHaveBeenCalledTimes(resolvableExtensions().length)
+    expect(actions.setWebpackConfig).toHaveBeenCalledTimes(
+      resolvableExtensions().length
+    )
 
-    const lastCall = boundActionCreators.setWebpackConfig.mock.calls.pop()
+    const lastCall = actions.setWebpackConfig.mock.calls.pop()
     expect(lastCall).toMatchSnapshot()
   })
 

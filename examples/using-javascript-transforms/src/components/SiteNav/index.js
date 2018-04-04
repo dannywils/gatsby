@@ -1,5 +1,5 @@
 import React from "react"
-import Link from "gatsby-link"
+import { Link } from "gatsby"
 import "./style.css"
 
 class SiteNav extends React.Component {
@@ -18,10 +18,18 @@ class SiteNav extends React.Component {
           </li>
           <li>
             <Link
-              to="/contact"
+              to="/about/"
+              className={location.pathname === `/about/` ? `current` : null}
+            >
+              {` `}About
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/contact/"
               className={location.pathname === `/contact/` ? `current` : null}
             >
-              {` `}Contact me
+              {` `}Contact
             </Link>
           </li>
         </ul>

@@ -1,7 +1,6 @@
-
 // Add Glamor support
-exports.modifyWebpackConfig = ({ boundActionCreators, plugins }) =>
-  boundActionCreators.setWebpackConfig({
+exports.onCreateWebpackConfig = ({ actions, plugins }) =>
+  actions.setWebpackConfig({
     plugins: [
       plugins.provide({
         Glamor: `glamor/react`,
@@ -9,14 +8,15 @@ exports.modifyWebpackConfig = ({ boundActionCreators, plugins }) =>
     ],
   })
 
-
-// Add Glamor support
-exports.modifyBabelrc = ({ babelrc }) => {
-  return {
-    ...babelrc,
-    plugins: babelrc.plugins.concat([
-      [`transform-react-jsx`, { pragma: `Glamor.createElement` }],
-      `glamor/babel-hoist`,
-    ]),
-  }
+// Add Glamor babel plugin
+exports.onCreateBabelConfig = ({ actions }) => {
+  actions.setBabelPlugin({
+    name: `glamor/babel-hoist`,
+  })
+  actions.setBabelPreset({
+    name: `@babel/preset-react`,
+    options: {
+      pragma: `Glamor.createElement`,
+    },
+  })
 }

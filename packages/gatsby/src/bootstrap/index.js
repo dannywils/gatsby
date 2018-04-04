@@ -1,22 +1,25 @@
 /* @flow */
 
-const glob = require(`glob`)
 const _ = require(`lodash`)
 const slash = require(`slash`)
 const fs = require(`fs-extra`)
 const md5File = require(`md5-file/promise`)
 const crypto = require(`crypto`)
 const del = require(`del`)
+const path = require(`path`)
 
 const apiRunnerNode = require(`../utils/api-runner-node`)
-const testRequireError = require(`../utils/test-require-error`)
 const { graphql } = require(`graphql`)
 const { store, emitter } = require(`../redux`)
 const loadPlugins = require(`./load-plugins`)
 const { initCache } = require(`../utils/cache`)
-const report = require(`../reporter`)
+const report = require(`gatsby-cli/lib/reporter`)
+const getConfigFile = require(`./get-config-file`)
 
-type ApiType = 'browser' | 'ssr';
+// Show stack trace on unhandled promises.
+process.on(`unhandledRejection`, (reason, p) => {
+  report.panic(reason)
+})
 
 const {
   extractQueries,
@@ -36,9 +39,17 @@ const {
 
 const preferDefault = m => (m && m.default) || m
 
-module.exports = async (program: any) => {
-  // Fix program directory path for windows env.
-  program.directory = slash(program.directory)
+type BootstrapArgs = {
+  directory: string,
+  prefixPaths?: boolean,
+}
+
+module.exports = async (args: BootstrapArgs) => {
+  const program = {
+    ...args,
+    // Fix program directory path for windows env.
+    directory: slash(args.directory),
+  }
 
   store.dispatch({
     type: `SET_PROGRAM`,
@@ -49,21 +60,25 @@ module.exports = async (program: any) => {
   // pages from previous builds to stick around.
   let activity = report.activityTimer(`delete html files from previous builds`)
   activity.start()
-  await del([`public/*.html`, `public/**/*.html`])
+  await del([
+    `public/*.{html}`,
+    `public/**/*.{html}`,
+    `!public/static`,
+    `!public/static/**/*.{html}`,
+  ])
   activity.end()
 
   // Try opening the site's gatsby-config.js file.
   activity = report.activityTimer(`open and validate gatsby-config.js`)
   activity.start()
-  let config
-  try {
-    // $FlowFixMe
-    config = preferDefault(require(`${program.directory}/gatsby-config`))
-  } catch (err) {
-    if (!testRequireError(`${program.directory}/gatsby-config`, err)) {
-      report.error(`Could not load gatsby-config`, err)
-      process.exit(1)
-    }
+  const config = await preferDefault(
+    getConfigFile(program.directory, `gatsby-config.js`)
+  )
+
+  if (config && config.polyfill) {
+    report.warn(
+      `Support for custom Promise polyfills has been removed in Gatsby v2. We only support Babel 7's new automatic polyfilling behavior.`
+    )
   }
 
   store.dispatch({
@@ -152,51 +167,96 @@ module.exports = async (program: any) => {
     })
     await fs.ensureDirSync(`${program.directory}/.cache/json`)
     await fs.ensureDirSync(`${program.directory}/.cache/layouts`)
+
+    // Ensure .cache/fragments exists and is empty. We want fragments to be
+    // added on every run in response to data as fragments can only be added if
+    // the data used to create the schema they're dependent on is available.
+    await fs.emptyDir(`${program.directory}/.cache/fragments`)
   } catch (err) {
     report.panic(`Unable to copy site files to .cache`, err)
   }
 
   // Find plugins which implement gatsby-browser and gatsby-ssr and write
   // out api-runners for them.
-  function getPluginsForType(type: ApiType) {
-    return flattenedPlugins
-      .map(plugin => {return {
-        resolve: glob.sync(`${plugin.resolve}/gatsby-${type}*`)[0],
-        options: plugin.pluginOptions,
-      }})
-      .filter(plugin => plugin.resolve)
+  const hasAPIFile = (env, plugin) => {
+    // The plugin loader has disabled SSR APIs for this plugin. Usually due to
+    // multiple implementations of an API that can only be implemented once
+    if (env === `ssr` && plugin.skipSSR === true) return undefined
+
+    const envAPIs = plugin[`${env}APIs`]
+    if (envAPIs && Array.isArray(envAPIs) && envAPIs.length > 0) {
+      return slash(path.join(plugin.resolve, `gatsby-${env}.js`))
+    }
+    return undefined
   }
 
-  function appendPluginsToFile(type: ApiType) {
-    const filePath = `${siteDir}/api-runner-${type}.js`
-    const plugins = getPluginsForType(type)
-    let src
-    try {
-      src = fs.readFileSync(filePath, `utf-8`)
-    } catch (err) {
-      report.panic(`Failed to read ${filePath}`, err)
-    }
+  const ssrPlugins = _.filter(
+    flattenedPlugins.map(plugin => {
+      return {
+        resolve: hasAPIFile(`ssr`, plugin),
+        options: plugin.pluginOptions,
+      }
+    }),
+    plugin => plugin.resolve
+  )
+  const browserPlugins = _.filter(
+    flattenedPlugins.map(plugin => {
+      return {
+        resolve: hasAPIFile(`browser`, plugin),
+        options: plugin.pluginOptions,
+      }
+    }),
+    plugin => plugin.resolve
+  )
 
-    fs.writeFileSync(
-      filePath,
-      report.stripIndent`
-        var preferDefault = m => (m && m.default) || m;
-        var plugins = [
-          ${plugins.map(({ options, resolve }) => `
-          {
-            plugin: preferDefault(require('${resolve}')),
-            options: ${JSON.stringify(options)},
-          }`).join(`,`)}
-        ];
+  let browserAPIRunner = ``
 
-        ${src}
-      `,
+  try {
+    browserAPIRunner = fs.readFileSync(
+      `${siteDir}/api-runner-browser.js`,
       `utf-8`
     )
+  } catch (err) {
+    report.panic(`Failed to read ${siteDir}/api-runner-browser.js`, err)
   }
 
-  appendPluginsToFile(`browser`)
-  appendPluginsToFile(`ssr`)
+  const browserPluginsRequires = browserPlugins
+    .map(
+      plugin =>
+        `{
+      plugin: require('${plugin.resolve}'),
+      options: ${JSON.stringify(plugin.options)},
+    }`
+    )
+    .join(`,`)
+
+  browserAPIRunner = `var plugins = [${browserPluginsRequires}]\n${browserAPIRunner}`
+
+  let sSRAPIRunner = ``
+
+  try {
+    sSRAPIRunner = fs.readFileSync(`${siteDir}/api-runner-ssr.js`, `utf-8`)
+  } catch (err) {
+    report.panic(`Failed to read ${siteDir}/api-runner-ssr.js`, err)
+  }
+
+  const ssrPluginsRequires = ssrPlugins
+    .map(
+      plugin =>
+        `{
+      plugin: require('${plugin.resolve}'),
+      options: ${JSON.stringify(plugin.options)},
+    }`
+    )
+    .join(`,`)
+  sSRAPIRunner = `var plugins = [${ssrPluginsRequires}]\n${sSRAPIRunner}`
+
+  fs.writeFileSync(
+    `${siteDir}/api-runner-browser.js`,
+    browserAPIRunner,
+    `utf-8`
+  )
+  fs.writeFileSync(`${siteDir}/api-runner-ssr.js`, sSRAPIRunner, `utf-8`)
 
   activity.end()
   /**
@@ -271,6 +331,18 @@ module.exports = async (program: any) => {
     waitForCascadingActions: true,
   })
   activity.end()
+
+  activity = report.activityTimer(`onPreExtractQueries`)
+  activity.start()
+  await apiRunnerNode(`onPreExtractQueries`)
+  activity.end()
+
+  // Update Schema for SitePage.
+  activity = report.activityTimer(`update schema`)
+  activity.start()
+  await require(`../schema`)()
+  activity.end()
+
   // Extract queries
   activity = report.activityTimer(`extract queries from components`)
   activity.start()
@@ -291,7 +363,11 @@ module.exports = async (program: any) => {
   // Write out files.
   activity = report.activityTimer(`write out page data`)
   activity.start()
-  await writePages()
+  try {
+    await writePages()
+  } catch (err) {
+    report.panic(`Failed to write out page data`, err)
+  }
   activity.end()
 
   // Write out redirects.
@@ -300,19 +376,20 @@ module.exports = async (program: any) => {
   await writeRedirects()
   activity.end()
 
-  // Update Schema for SitePage.
-  activity = report.activityTimer(`update schema`)
-  activity.start()
-  await require(`../schema`)()
-  activity.end()
-
   const checkJobsDone = _.debounce(resolve => {
     const state = store.getState()
     if (state.jobs.active.length === 0) {
       report.log(``)
       report.info(`bootstrap finished - ${process.uptime()} s`)
       report.log(``)
-      resolve({ graphqlRunner })
+
+      // onPostBootstrap
+      activity = report.activityTimer(`onPostBootstrap`)
+      activity.start()
+      apiRunnerNode(`onPostBootstrap`).then(() => {
+        activity.end()
+        resolve({ graphqlRunner })
+      })
     }
   }, 100)
 

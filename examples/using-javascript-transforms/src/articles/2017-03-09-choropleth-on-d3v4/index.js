@@ -1,9 +1,10 @@
 import React from "react"
+import BlogPostChrome from "../../components/BlogPostChrome"
 import { findDOMNode } from "react-dom"
 var d3 = require(`d3`)
 
 // this is one method to export data and make it usable elsewhere
-exports.data = {
+exports.frontmatter = {
   title: `Choropleth on d3v4`,
   written: `2017-03-09`,
   updated: `2017-04-28`,
@@ -49,10 +50,14 @@ class choroplethBase extends React.Component {
   render() {
     let data = this.props.data.markdownRemark
     let html = data.html
-    let frontmatter = this.props.data.jsFrontmatter.data
 
     return (
-      <div className="">
+      <BlogPostChrome
+        {...{
+          frontmatter: this.props.data.javascriptFrontmatter.frontmatter,
+          site: this.props.data.site,
+        }}
+      >
         <div className="section">
           <div className="container">
             <div id="states" />
@@ -64,7 +69,7 @@ class choroplethBase extends React.Component {
             <div dangerouslySetInnerHTML={{ __html: html }} />
           </div>
         </div>
-      </div>
+      </BlogPostChrome>
     )
   }
 }
@@ -207,17 +212,11 @@ export const pageQuery = graphql`
     ) {
       html
     }
-    jsFrontmatter(fields: { slug: { eq: $slug } }) {
-      data {
-        error
-        layoutType
-        path
-        title
-        written
-        category
-        description
-        updated
-      }
+    javascriptFrontmatter(fields: { slug: { eq: $slug } }) {
+      ...JSBlogPost_frontmatter
+    }
+    site {
+      ...site_sitemetadata
     }
   }
 `

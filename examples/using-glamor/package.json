@@ -5,18 +5,22 @@
   "version": "1.0.0",
   "author": "Kyle Mathews <mathews.kyle@gmail.com>",
   "dependencies": {
-    "gatsby": "latest",
-    "gatsby-link": "latest",
-    "gatsby-plugin-google-analytics": "latest",
-    "gatsby-plugin-offline": "latest",
-    "gatsby-plugin-glamor": "latest",
+    "gatsby": "2.0.0-alpha.9fe50b00",
+    "gatsby-plugin-glamor": "canary",
+    "gatsby-plugin-google-analytics": "canary",
+    "gatsby-plugin-offline": "canary",
+    "glamor": "^2.20.40",
     "lodash": "^4.16.4",
-    "react-typography": "^0.15.0",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "react-typography": "^0.16.13",
     "slash": "^1.0.0",
-    "typography": "^0.15.8",
-    "typography-breakpoint-constants": "^0.14.0"
+    "typography": "^0.16.6",
+    "typography-breakpoint-constants": "^0.15.10"
   },
-  "keywords": ["gatsby"],
+  "keywords": [
+    "gatsby"
+  ],
   "license": "MIT",
   "main": "n/a",
   "scripts": {

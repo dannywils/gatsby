@@ -5,6 +5,7 @@ const mime = require(`mime`)
 const prettyBytes = require(`pretty-bytes`)
 
 const md5File = require(`bluebird`).promisify(require(`md5-file`))
+const crypto = require(`crypto`)
 
 const createId = path => {
   const slashed = slash(path)
@@ -13,31 +14,56 @@ const createId = path => {
 
 exports.createId = createId
 
-exports.createFileNode = async (pathToFile, pluginOptions = {}) => {
+exports.createFileNode = async (
+  pathToFile,
+  createNodeId,
+  pluginOptions = {}
+) => {
   const slashed = slash(pathToFile)
+  const parsedSlashed = path.parse(slashed)
   const slashedFile = {
-    ...path.parse(slashed),
+    ...parsedSlashed,
     absolutePath: slashed,
+    // Useful for limiting graphql query with certain parent directory
+    relativeDirectory: path.relative(
+      pluginOptions.path || process.cwd(),
+      parsedSlashed.dir
+    ),
   }
-  // console.log('createFileNode', slashedFile.absolutePath)
-  const contentDigest = await md5File(slashedFile.absolutePath)
-  const stats = await fs.stat(slashedFile.absolutePath)
 
-  // console.log('createFileNode:stat', slashedFile.absolutePath)
+  const stats = await fs.stat(slashedFile.absolutePath)
+  let internal
+  if (stats.isDirectory()) {
+    const contentDigest = crypto
+      .createHash(`md5`)
+      .update(
+        JSON.stringify({ stats: stats, absolutePath: slashedFile.absolutePath })
+      )
+      .digest(`hex`)
+    internal = {
+      contentDigest,
+      type: `Directory`,
+    }
+  } else {
+    const contentDigest = await md5File(slashedFile.absolutePath)
+    const mediaType = mime.getType(slashedFile.ext)
+    internal = {
+      contentDigest,
+      type: `File`,
+      mediaType: mediaType ? mediaType : `application/octet-stream`,
+    }
+  }
+
   // Stringify date objects.
   return JSON.parse(
     JSON.stringify({
       // Don't actually make the File id the absolute path as otherwise
       // people will use the id for that and ids shouldn't be treated as
       // useful information.
-      id: createId(pathToFile),
+      id: createNodeId(pathToFile),
       children: [],
       parent: `___SOURCE___`,
-      internal: {
-        contentDigest: contentDigest,
-        mediaType: mime.lookup(slashedFile.ext),
-        type: `File`,
-      },
+      internal,
       sourceInstanceName: pluginOptions.name || `__PROGRAMATTIC__`,
       absolutePath: slashedFile.absolutePath,
       relativePath: slash(

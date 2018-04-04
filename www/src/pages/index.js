@@ -1,8 +1,7 @@
 import React from "react"
-import Link from "gatsby-link"
+import { Link } from "gatsby"
 
-import presets from "../utils/presets"
-import colors from "../utils/colors"
+import presets, { colors } from "../utils/presets"
 import { rhythm, scale, options } from "../utils/typography"
 import { JSIcon, WebpackIcon, ReactJSIcon, GraphQLIcon } from "../assets/logos"
 import { vP, vPHd, vPVHd, vPVVHd } from "../components/gutters"
@@ -21,7 +20,6 @@ import TechWithIcon from "../components/tech-with-icon"
 
 class IndexRoute extends React.Component {
   render() {
-    console.log(this.props)
     const blogPosts = this.props.data.allMarkdownRemark
     return (
       <div css={{ position: `relative` }}>
@@ -80,9 +78,7 @@ class IndexRoute extends React.Component {
                 </FuturaParagraph>
               </Card>
               <Card>
-                <CardHeadline css={{ color: presets.brandDark }}>
-                  Future-proof your website
-                </CardHeadline>
+                <CardHeadline>Future-proof your website</CardHeadline>
                 <FuturaParagraph>
                   Don't build a website with last decade's tech. The future of
                   the web is mobile, JavaScript and APIs—the {` `}
@@ -93,7 +89,7 @@ class IndexRoute extends React.Component {
               </Card>
               <Card>
                 <CardHeadline>
-                  <em css={{ color: presets.brand, fontStyle: `normal` }}>
+                  <em css={{ color: colors.gatsby, fontStyle: `normal` }}>
                     Static
                   </em>
                   {` `}
@@ -123,7 +119,7 @@ class IndexRoute extends React.Component {
                   borderTopLeftRadius: 0,
                   borderTopRightRadius: 0,
                   flex: `1 1 100%`,
-                  borderTop: `1px solid ${presets.veryLightPurple}`,
+                  borderTop: `1px solid ${colors.ui.light}`,
                 }}
               />
 
@@ -148,7 +144,7 @@ class IndexRoute extends React.Component {
 
               <div
                 css={{
-                  borderTop: `1px solid ${presets.veryLightPurple}`,
+                  borderTop: `1px solid ${colors.ui.light}`,
                   flex: `1 1 100%`,
                   [presets.Tablet]: {
                     paddingTop: rhythm(1),
@@ -163,7 +159,7 @@ class IndexRoute extends React.Component {
                     css={{
                       textAlign: `left`,
                       marginTop: 0,
-                      color: presets.brand,
+                      color: colors.gatsby,
                       [presets.Tablet]: {
                         paddingBottom: rhythm(1),
                       },
@@ -178,6 +174,12 @@ class IndexRoute extends React.Component {
                       css={{ marginBottom: rhythm(2) }}
                     />
                   ))}
+                  <CtaButton
+                    to="/blog/"
+                    overrideCSS={{ marginBottom: rhythm(2) }}
+                  >
+                    Read More
+                  </CtaButton>
                 </Container>
               </div>
             </Cards>
@@ -199,7 +201,7 @@ export const pageQuery = graphql`
     }
     file(relativePath: { eq: "gatsby-explanation.png" }) {
       childImageSharp {
-        responsiveSizes(maxWidth: 870) {
+        sizes(maxWidth: 870) {
           src
           srcSet
           sizes
@@ -211,7 +213,7 @@ export const pageQuery = graphql`
       limit: 3
       filter: {
         frontmatter: { draft: { ne: true } }
-        fileAbsolutePath: { regex: "/blog/" }
+        fileAbsolutePath: { regex: "/docs.blog/" }
       }
     ) {
       edges {

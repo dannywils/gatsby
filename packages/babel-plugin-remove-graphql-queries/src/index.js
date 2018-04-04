@@ -26,12 +26,14 @@ function getGraphQLTag(path) {
     return ast
   } catch (err) {
     throw new Error(
-      `BabelPluginRemoveGraphQLQueries: GraphQL syntax error in query:\n\n${text}\n\nmessage:\n\n${err.message}`
+      `BabelPluginRemoveGraphQLQueries: GraphQL syntax error in query:\n\n${text}\n\nmessage:\n\n${
+        err.message
+      }`
     )
   }
 }
 
-function BabelPluginRemoveGraphQLQueries({ types: t }) {
+export default function({ types: t }) {
   return {
     visitor: {
       TaggedTemplateExpression(path, state) {
@@ -39,14 +41,11 @@ function BabelPluginRemoveGraphQLQueries({ types: t }) {
 
         if (!ast) return null
 
-        return path.replaceWith(
-          t.StringLiteral(`** extracted graphql fragment **`)
-        )
+        path.replaceWith(t.StringLiteral(`** extracted graphql fragment **`))
+        return null
       },
     },
   }
 }
 
-BabelPluginRemoveGraphQLQueries.getGraphQLTag = getGraphQLTag
-
-module.exports = BabelPluginRemoveGraphQLQueries
+export { getGraphQLTag }

@@ -5,10 +5,10 @@
   "author": "jhermans85@hotmail.com",
   "dependencies": {
     "gatsby": "latest",
-    "gatsby-link": "latest",
-    "gatsby-plugin-react-helmet": "latest",
-    "gatsby-source-mongodb": "latest",
-    "gatsby-transformer-remark": "latest"
+    "gatsby-plugin-react-helmet": "^2.0.1",
+    "gatsby-source-mongodb": "^1.5.11",
+    "gatsby-transformer-remark": "^1.7.21",
+    "react-helmet": "^5.2.0"
   },
   "license": "MIT",
   "main": "n/a",

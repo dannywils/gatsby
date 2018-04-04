@@ -1,5 +1,6 @@
 import pageFinderFactory from "./find-page"
 import emitter from "./emitter"
+import stripPrefix from "./strip-prefix"
 
 const preferDefault = m => (m && m.default) || m
 
@@ -8,21 +9,50 @@ let inInitialRender = true
 let hasFetched = Object.create(null)
 let syncRequires = {}
 let asyncRequires = {}
+let pathPrefix = ``
+let fetchHistory = []
+const failedPaths = {}
+const failedResources = {}
+const MAX_HISTORY = 5
 
-const fetchResource = (resourceName) => {
+const fetchResource = resourceName => {
   // Find resource
-  const resourceFunction =
-    resourceName.startsWith(`component---`)
-      ? asyncRequires.components[resourceName] ||
-        asyncRequires.layouts[resourceName]
-      : asyncRequires.json[resourceName]
+  let resourceFunction
+  if (resourceName.slice(0, 12) === `component---`) {
+    resourceFunction = asyncRequires.components[resourceName]
+  } else if (resourceName.slice(0, 9) === `layout---`) {
+    resourceFunction = asyncRequires.layouts[resourceName]
+  } else {
+    resourceFunction = asyncRequires.json[resourceName]
+  }
 
   // Download the resource
   hasFetched[resourceName] = true
-  return resourceFunction()
+  return new Promise(resolve => {
+    const fetchPromise = resourceFunction()
+    let failed = false
+    return fetchPromise
+      .catch(() => {
+        failed = true
+      })
+      .then(component => {
+        fetchHistory.push({
+          resource: resourceName,
+          succeeded: !failed,
+        })
+
+        if (!failedResources[resourceName]) {
+          failedResources[resourceName] = failed
+        }
+
+        fetchHistory = fetchHistory.slice(-MAX_HISTORY)
+
+        resolve(component)
+      })
+  })
 }
 
-const getResourceModule = (resourceName) =>
+const getResourceModule = resourceName =>
   fetchResource(resourceName).then(preferDefault)
 
 // Prefetcher logic
@@ -42,6 +72,31 @@ if (process.env.NODE_ENV === `production`) {
   })
 }
 
+const appearsOnLine = () => {
+  const isOnLine = navigator.onLine
+  if (typeof isOnLine === `boolean`) {
+    return isOnLine
+  }
+
+  // If no navigator.onLine support assume onLine if any of last N fetches succeeded
+  const succeededFetch = fetchHistory.find(entry => entry.succeeded)
+  return !!succeededFetch
+}
+
+const handleResourceLoadError = (path, message) => {
+  console.log(message)
+
+  if (!failedPaths[path]) {
+    failedPaths[path] = message
+  }
+
+  if (
+    appearsOnLine() &&
+    window.location.pathname.replace(/\/$/g, ``) !== path.replace(/\/$/g, ``)
+  ) {
+    window.location.pathname = path
+  }
+}
 
 // Note we're not actively using the path data atm. There
 // could be future optimizations however around trying to ensure
@@ -56,7 +111,6 @@ const sortResourcesByCount = (a, b) => {
   else return 0
 }
 
-
 let findPage
 let pages = []
 let pathScriptsCache = {}
@@ -68,13 +122,16 @@ const queue = {
     resourcesCount = Object.create(null)
     resourcesArray = []
     pages = []
+    pathPrefix = ``
   },
 
   addPagesArray: newPages => {
     pages = newPages
-    let pathPrefix = ``
-    if (typeof __PREFIX_PATHS__ !== `undefined`) {
-      pathPrefix = __PATH_PREFIX__
+    if (
+      typeof __PREFIX_PATHS__ !== `undefined` &&
+      typeof __PATH_PREFIX__ !== `undefined`
+    ) {
+      if (__PREFIX_PATHS__ === true) pathPrefix = __PATH_PREFIX__
     }
     findPage = pageFinderFactory(newPages, pathPrefix)
   },
@@ -86,11 +143,9 @@ const queue = {
   },
 
   dequeue: () => resourcesArray.pop(),
-
-  // dequeue: path => pathArray.pop(),
-
-  enqueue: path => {
+  enqueue: rawPath => {
     // Check page exists.
+    const path = stripPrefix(rawPath, pathPrefix)
     if (!pages.some(p => p.path === path)) {
       return false
     }
@@ -148,10 +203,16 @@ const queue = {
         navigator.serviceWorker
           .getRegistrations()
           .then(function(registrations) {
-            for (let registration of registrations) {
-              registration.unregister()
+            // We would probably need this to
+            // prevent unnecessary reloading of the page
+            // while unregistering of ServiceWorker is not happening
+            if (registrations.length) {
+              for (let registration of registrations) {
+                registration.unregister()
+              }
+
+              window.location.reload()
             }
-            window.location.reload()
           })
       }
     }
@@ -164,19 +225,26 @@ const queue = {
       const pageResources = {
         component: syncRequires.components[page.componentChunkName],
         json: syncRequires.json[page.jsonName],
-        layout: syncRequires.layouts[page.layoutComponentChunkName],
-        // page,
+        layout: syncRequires.layouts[page.layout],
+        page,
       }
       cb(pageResources)
       return pageResources
-
     }
     // Production code path
+    if (failedPaths[path]) {
+      handleResourceLoadError(
+        path,
+        `Previously detected load failure for "${path}"`
+      )
+
+      return cb()
+    }
     const page = findPage(path)
 
     if (!page) {
       console.log(`A page wasn't found for "${path}"`)
-      return null
+      return cb()
     }
 
     // Use the path from the page so the pathScriptsCache uses
@@ -191,19 +259,59 @@ const queue = {
           page,
           pageResources: pathScriptsCache[path],
         })
+        cb(pathScriptsCache[path])
+        return pathScriptsCache[path]
       })
+
+      emitter.emit(`onPreLoadPageResources`, { path })
+      // Nope, we need to load resource(s)
+      let component
+      let json
+      let layout
+      // Load the component/json/layout and parallel and call this
+      // function when they're done loading. When both are loaded,
+      // we move on.
+      const done = () => {
+        if (component && json && (!page.layoutComponentChunkName || layout)) {
+          pathScriptsCache[path] = { component, json, layout, page }
+          const pageResources = { component, json, layout, page }
+          cb(pageResources)
+          emitter.emit(`onPostLoadPageResources`, {
+            page,
+            pageResources,
+          })
+        }
+      }
+      getResourceModule(page.componentChunkName, (err, c) => {
+        if (err) {
+          handleResourceLoadError(
+            page.path,
+            `Loading the component for ${page.path} failed`
+          )
+        }
+        component = c
+        done()
+      })
+      getResourceModule(page.jsonName, (err, j) => {
+        if (err) {
+          handleResourceLoadError(
+            page.path,
+            `Loading the JSON for ${page.path} failed`
+          )
+        }
+        json = j
+        done()
+      })
+      cb(pathScriptsCache[path])
       return pathScriptsCache[path]
     }
-
-    emitter.emit(`onPreLoadPageResources`, { path })
 
     Promise.all([
       getResourceModule(page.componentChunkName),
       getResourceModule(page.jsonName),
-      getResourceModule(page.layoutComponentChunkName),
-    ])
-    .then(([component, json, layout] )=> {
-      const pageResources = { component, json, layout }
+      page.layout && getResourceModule(page.layout),
+    ]).then(([component, json, layout]) => {
+      const pageResources = { component, json, layout, page }
 
       pathScriptsCache[path] = pageResources
       cb(pageResources)
@@ -221,4 +329,8 @@ const queue = {
   ___resources: () => resourcesArray.slice().reverse(),
 }
 
-module.exports = queue
+export const publicLoader = {
+  getResourcesForPathname: queue.getResourcesForPathname,
+}
+
+export default queue

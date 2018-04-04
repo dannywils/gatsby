@@ -1,13 +1,16 @@
 import { graphql as graphqlFunction } from "graphql"
 const fs = require(`fs-extra`)
+const report = require(`gatsby-cli/lib/reporter`)
+const md5 = require(`md5`)
 
 const { joinPath } = require(`../../utils/path`)
-const report = require(`../../reporter`)
-
 const { store } = require(`../../redux`)
+
+const resultHashes = {}
 
 // Run query for a page
 module.exports = async (pageOrLayout, component) => {
+  pageOrLayout.id = pageOrLayout._id
   const { schema, program } = store.getState()
 
   const graphql = (query, context) =>
@@ -25,6 +28,7 @@ module.exports = async (pageOrLayout, component) => {
       ...pageOrLayout.context,
     })
   }
+  // console.log(`running query`, component.pathname, component.query, result)
 
   // If there's a graphql error then log the error. If we're building, also
   // quit.
@@ -47,15 +51,22 @@ module.exports = async (pageOrLayout, component) => {
   }
 
   // Add the path/layout context onto the results.
-  let contextKey = `pathContext`
   if (!pageOrLayout.path) {
-    contextKey = `layoutContext`
+    result[`layoutContext`] = pageOrLayout.context
+  } else {
+    result[`pageContext`] = pageOrLayout.context
   }
-  result[contextKey] = pageOrLayout.context
-  const resultJSON = JSON.stringify(result, null, 4)
-
-  await fs.writeFile(
-    joinPath(program.directory, `.cache`, `json`, pageOrLayout.jsonName),
-    resultJSON
+  const resultJSON = JSON.stringify(result)
+  const resultHash = md5(resultJSON)
+  const resultPath = joinPath(
+    program.directory,
+    `.cache`,
+    `json`,
+    pageOrLayout.jsonName
   )
+
+  if (resultHashes[resultPath] !== resultHash) {
+    resultHashes[resultPath] = resultHash
+    await fs.writeFile(resultPath, resultJSON)
+  }
 }

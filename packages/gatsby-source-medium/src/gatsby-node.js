@@ -25,22 +25,39 @@ const convertTimestamps = (nextObj, prevObj, prevKey) => {
 
 const strip = payload => payload.replace(prefix, ``)
 
-exports.sourceNodes = async ({ boundActionCreators }, { username }) => {
-  const { createNode } = boundActionCreators
+exports.sourceNodes = async ({ actions, createNodeId }, { username }) => {
+  const { createNode } = actions
 
   try {
     const result = await fetch(username)
     const json = JSON.parse(strip(result.data))
 
-    const { posts } = json.payload
-    const collectionKeys = Object.keys(json.payload.references.Collection)
-    const userKeys = Object.keys(json.payload.references.User)
+    let importableResources = []
+    let posts = {} // because `posts` needs to be in a scope accessible by `links` below
 
-    const importableResources = [
-      userKeys.map(key => json.payload.references.User[key]),
-      posts,
-      collectionKeys.map(key => json.payload.references.Collection[key]),
-    ]
+    const users = Object.keys(json.payload.references.User).map(
+      key => json.payload.references.User[key]
+    )
+    importableResources = importableResources.concat(users)
+
+    if (json.payload.posts) {
+      posts = json.payload.posts
+      importableResources = importableResources.concat(posts)
+    }
+
+    if (json.payload.references.Post) {
+      posts = Object.keys(json.payload.references.Post).map(
+        key => json.payload.references.Post[key]
+      )
+      importableResources = importableResources.concat(posts)
+    }
+
+    if (json.payload.references.Collection) {
+      const collections = Object.keys(json.payload.references.Collection).map(
+        key => json.payload.references.Collection[key]
+      )
+      importableResources = importableResources.concat(collections)
+    }
 
     const resources = Array.prototype.concat(...importableResources)
     resources.map(resource => {
@@ -67,7 +84,7 @@ exports.sourceNodes = async ({ boundActionCreators }, { username }) => {
       const node = Object.assign(
         resource,
         {
-          id: resource.id ? resource.id : resource.userId,
+          id: createNodeId(resource.id ? resource.id : resource.userId),
           parent: `__SOURCE__`,
           children: [],
           internal: {

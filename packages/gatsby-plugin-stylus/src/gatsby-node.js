@@ -1,3 +1,4 @@
+const MiniCssExtractPlugin = require(`mini-css-extract-plugin`)
 /**
  * Usage:
  *
@@ -19,11 +20,11 @@
  *   },
  * ],
  */
-exports.modifyWebpackConfig = (
-  { boundActionCreators, stage, rules, plugins, loaders },
+exports.onCreateWebpackConfig = (
+  { actions, stage, rules, plugins, loaders },
   { postCssPlugins, ...stylusOptions }
 ) => {
-  const { setWebpackConfig } = boundActionCreators
+  const { setWebpackConfig } = actions
   const PRODUCTION = stage !== `develop`
 
   const stylusLoader = {
@@ -37,45 +38,46 @@ exports.modifyWebpackConfig = (
   const stylusRule = {
     test: /\.styl$/,
     exclude: /\.module\.styl$/,
-    use: plugins.extractText.extract({
-      fallback: loaders.style,
-      use: [
-        loaders.css({ importLoaders: 1 }),
-        loaders.postcss({ plugins: postCssPlugins }),
-        stylusLoader,
-      ],
-    }),
+    use: [
+      MiniCssExtractPlugin.loader,
+      loaders.css({ importLoaders: 1 }),
+      loaders.postcss({ plugins: postCssPlugins }),
+      stylusLoader,
+    ],
   }
 
   const stylusRuleModules = {
     test: /\.module\.styl$/,
-    use: plugins.extractText.extract({
-      fallback: loaders.style,
-      use: [
-        loaders.css({ modules: true, importLoaders: 1 }),
-        loaders.postcss({ plugins: postCssPlugins }),
-        stylusLoader,
-      ],
-    }),
+    use: [
+      MiniCssExtractPlugin.loader,
+      loaders.css({ modules: true, importLoaders: 1 }),
+      loaders.postcss({ plugins: postCssPlugins }),
+      stylusLoader,
+    ],
   }
 
   let configRules = []
 
   switch (stage) {
     case `develop`:
-    case `build-css`:
     case `build-javascript`:
-      configRules = configRules.concat([stylusRule, stylusRuleModules])
+      configRules = configRules.concat([
+        { oneOf: [stylusRule, stylusRuleModules] },
+      ])
       break
 
     case `build-html`:
     case `develop-html`:
       configRules = configRules.concat([
         {
-          ...stylusRule,
-          use: loaders.null,
+          oneOf: [
+            {
+              ...stylusRule,
+              use: [loaders.null()],
+            },
+            stylusRuleModules,
+          ],
         },
-        stylusRuleModules,
       ])
       break
   }

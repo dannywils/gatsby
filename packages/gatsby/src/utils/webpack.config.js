@@ -1,27 +1,24 @@
-import { uniq, some } from "lodash"
-import fs from "fs"
-import path from "path"
-import dotenv from "dotenv"
-import StaticSiteGeneratorPlugin from "static-site-generator-webpack-plugin"
-import { StatsWriterPlugin } from "webpack-stats-plugin"
-import FriendlyErrorsWebpackPlugin from "friendly-errors-webpack-plugin"
+require(`v8-compile-cache`)
 
+const fs = require(`fs`)
+const path = require(`path`)
+const dotenv = require(`dotenv`)
+const StaticSiteGeneratorPlugin = require(`static-site-generator-webpack-plugin`)
+const FriendlyErrorsWebpackPlugin = require(`friendly-errors-webpack-plugin`)
 const { store } = require(`../redux`)
 const { actions } = require(`../redux/actions`)
 const debug = require(`debug`)(`gatsby:webpack-config`)
-const WebpackMD5Hash = require(`webpack-md5-hash`)
-const GatsbyModulePlugin = require(`gatsby-module-loader/plugin`)
+const report = require(`gatsby-cli/lib/reporter`)
 const { withBasePath } = require(`./path`)
 
 const apiRunnerNode = require(`./api-runner-node`)
-const createConfig = require(`./webpack-utils`)
+const createUtils = require(`./webpack-utils`)
 
-// Five stages or modes:
+// Four stages or modes:
 //   1) develop: for `gatsby develop` command, hot reload and CSS injection into page
 //   2) develop-html: same as develop without react-hmre in the babel config for html renderer
-//   3) build-css: build styles.css file
+//   3) build-javascript: Build JS and CSS chunks for production
 //   4) build-html: build all HTML files
-//   5) build-javascript: Build js chunks for Single Page App in production
 
 module.exports = async (
   program,
@@ -35,8 +32,7 @@ module.exports = async (
   // We combine develop & develop-html stages for purposes of generating the
   // webpack config.
   const stage = suppliedStage
-  const webpackConfig = await createConfig({ stage, program })
-  const { rules, loaders, plugins } = webpackConfig
+  const { rules, loaders, plugins } = await createUtils({ stage, program })
 
   function processEnv(stage, defaultNodeEnv) {
     debug(`Building env for "${stage}"`)
@@ -47,11 +43,12 @@ module.exports = async (
     let parsed = {}
     try {
       parsed = dotenv.parse(fs.readFileSync(envFile, { encoding: `utf8` }))
-    } catch (e) {
-      if (e && e.code !== `ENOENT`) {
-        console.log(e)
+    } catch (err) {
+      if (err.code !== `ENOENT`) {
+        report.error(`There was a problem processing the .env file`, err)
       }
     }
+
     const envObject = Object.keys(parsed).reduce((acc, key) => {
       acc[key] = JSON.stringify(parsed[key])
       return acc
@@ -79,16 +76,11 @@ module.exports = async (
           path: directory,
           filename: `[name].js`,
           publicPath: `http://${program.host}:${webpackPort}/`,
-        }
-      case `build-css`:
-        // Webpack will always generate a resultant javascript file.
-        // But we don't want it for this step. Deleted by build-css.js.
-        return {
-          path: directoryPath(`public`),
-          filename: `bundle-for-css.js`,
-          publicPath: program.prefixPaths
-            ? `${store.getState().config.pathPrefix}/`
-            : `/`,
+          // Add /* filename */ comments to generated require()s in the output.
+          pathinfo: true,
+          // Point sourcemap entries to original disk location (format as URL on Windows)
+          devtoolModuleFilenameTemplate: info =>
+            path.resolve(info.absoluteResourcePath).replace(/\\/g, `/`),
         }
       case `build-html`:
       case `develop-html`:
@@ -98,6 +90,9 @@ module.exports = async (
           path: directoryPath(`public`),
           filename: `render-page.js`,
           libraryTarget: `umd`,
+          library: `lib`,
+          umdNamedDefine: true,
+          globalObject: `this`,
           publicPath: program.prefixPaths
             ? `${store.getState().config.pathPrefix}/`
             : `/`,
@@ -121,20 +116,15 @@ module.exports = async (
       case `develop`:
         return {
           commons: [
-            require.resolve(`react-hot-loader/patch`),
-            `${require.resolve(
-              `webpack-hot-middleware/client`
-            )}?path=http://${program.host}:${webpackPort}/__webpack_hmr&reload=true`,
+            `${require.resolve(`webpack-hot-middleware/client`)}?path=http://${
+              program.host
+            }:${webpackPort}/__webpack_hmr&reload=true&overlay=false`,
             directoryPath(`.cache/app`),
           ],
         }
       case `develop-html`:
         return {
           main: directoryPath(`.cache/develop-static-entry`),
-        }
-      case `build-css`:
-        return {
-          main: directoryPath(`.cache/app`),
         }
       case `build-html`:
         return {
@@ -153,9 +143,6 @@ module.exports = async (
     let configPlugins = [
       plugins.moment(),
 
-      // There seems to be a bug in file-loader that assumes this will be set.
-      plugins.loaderOptions({ fileLoader: {} }),
-
       // Add a few global variables. Set NODE_ENV to production (enables
       // optimizations for React) and whether prefixing links is enabled
       // (__PREFIX_PATHS__) and what the link prefix is (__PATH_PREFIX__).
@@ -163,12 +150,16 @@ module.exports = async (
         "process.env": processEnv(stage, `development`),
         __PREFIX_PATHS__: program.prefixPaths,
         __PATH_PREFIX__: JSON.stringify(store.getState().config.pathPrefix),
-        __POLYFILL__: store.getState().config.polyfill,
       }),
 
-      plugins.extractText({
-        filename: stage === `build-css` ? `styles.css` : `${stage}.css`,
-      }),
+      plugins.extractText(
+        stage === `develop`
+          ? {
+              filename: `[name].css`,
+              chunkFilename: `[name].css`,
+            }
+          : {}
+      ),
     ]
 
     switch (stage) {
@@ -177,17 +168,16 @@ module.exports = async (
           plugins.hotModuleReplacement(),
           plugins.noEmitOnErrors(),
 
-          // Names module ids with their filepath. We use this in development
-          // to make it easier to see what modules have hot reloaded, etc. as
-          // the numerical IDs aren't useful. In production we use numerical module
-          // ids to reduce filesize.
-          plugins.namedModules(),
           new FriendlyErrorsWebpackPlugin({
             clearConsole: false,
             compilationSuccessInfo: {
               messages: [
-                `Your site is running at http://localhost:${program.port}`,
-                `Your graphql debugger is running at http://localhost:${program.port}/___graphql`,
+                `You can now view your site in the browser running at http://${
+                  program.host
+                }:${program.port}`,
+                `Your graphql debugger is running at http://${program.host}:${
+                  program.port
+                }/___graphql`,
               ],
             },
           }),
@@ -201,85 +191,44 @@ module.exports = async (
         ])
         break
       case `build-javascript`: {
-        // Get array of page template component names.
-        let components = store
-          .getState()
-          .pages.map(page => page.componentChunkName)
-
-        components = uniq(components)
-        components.push(`layout-component---index`)
-
         configPlugins = configPlugins.concat([
-          new WebpackMD5Hash(),
-
-          // Extract "commons" chunk from the app entry and all
-          // page components.
-          plugins.commonsChunk({
-            name: `commons`,
-            chunks: [`app`, ...components],
-            // The more page components there are, the higher we raise the bar
-            // for merging in page-specific JS libs into the commons chunk. The
-            // two principles here is a) keep the TTI (time to interaction) as
-            // low as possible so that means keeping commons.js small with
-            // critical framework code (e.g. React/react-router) and b) is we
-            // want to push JS parse/eval work as close as possible to when
-            // it's used. Since most people don't navigate to most pages, take
-            // tradeoff of loading/evaling modules multiple times over
-            // loading/evaling lots of unused code on the initial opening of
-            // the app.
-            minChunks: (module, count) => {
-              const vendorModuleList = [
-                `react`,
-                `react-dom`,
-                `fbjs`,
-                `react-router`,
-                `react-router-dom`,
-                `gatsby-react-router-scroll`,
-                `dom-helpers`, // Used in gatsby-react-router-scroll
-                `path-to-regexp`,
-                `isarray`, // Used by path-to-regexp.
-                `scroll-behavior`,
-                `history`,
-                `resolve-pathname`, // Used by history.
-                `value-equal`, // Used by history.
-                `invariant`, // Used by history.
-                `warning`, // Used by history.
-                `babel-runtime`, // Used by history.
-                `core-js`, // Used by history.
-                `loose-envify`, // Used by history.
-                `prop-types`,
-                `gatsby-link`,
-              ]
-              const isFramework = some(
-                vendorModuleList.map(vendor => {
-                  const regex = new RegExp(`/node_modules/${vendor}/.*`, `i`)
-                  return regex.test(module.resource)
-                })
-              )
-              return isFramework || count > 3
+          // Minify Javascript.
+          plugins.uglify({
+            uglifyOptions: {
+              compress: {
+                drop_console: false,
+              },
             },
           }),
+          // Write out stats object mapping named dynamic imports (aka page
+          // components) to all their async chunks.
+          {
+            apply: function(compiler) {
+              compiler.plugin(`done`, function(stats, done) {
+                let assets = {}
 
-          // using a chunk name that doesn't exist creates a chunk with
-          // just the runtime bits
-          plugins.commonsChunk({
-            name: `webpack-runtime`,
-          }),
-          // Write out mapping between chunk names and their hashed names. We use
-          // this to add the needed javascript files to each HTML page.
-          new StatsWriterPlugin(),
+                for (let chunkGroup of stats.compilation.chunkGroups) {
+                  if (chunkGroup.name) {
+                    let files = []
+                    for (let chunk of chunkGroup.chunks) {
+                      files.push(...chunk.files)
+                    }
+                    assets[chunkGroup.name] = files.filter(
+                      f => f.slice(-4) !== `.map`
+                    )
+                  }
+                }
 
-
-          // Minify Javascript.
-          plugins.uglify(),
-          new GatsbyModulePlugin(),
-          plugins.namedModules(),
-          plugins.namedChunks((chunk) => {
-            if (chunk.name) return chunk.name
-            return chunk.modules
-              .map(m => path.relative(m.context, m.request))
-              .join(`_`)
-          }),
+                fs.writeFile(
+                  path.join(`public`, `webpack.stats.json`),
+                  JSON.stringify({
+                    assetsByChunkName: assets,
+                  }),
+                  done
+                )
+              })
+            },
+          },
         ])
         break
       }
@@ -291,7 +240,7 @@ module.exports = async (
   function getDevtool() {
     switch (stage) {
       case `develop`:
-        return `cheap-module-source-map`
+        return `eval`
       // use a normal `source-map` for the html phases since
       // it gives better line and column numbers
       case `develop-html`:
@@ -303,42 +252,36 @@ module.exports = async (
     }
   }
 
+  function getMode() {
+    switch (stage) {
+      case `build-javascript`:
+        return `production`
+      case `develop`:
+      case `develop-html`:
+      case `build-html`:
+        return `development` // So we don't uglify the html bundle
+      default:
+        return `production`
+    }
+  }
+
   function getModule(config) {
-    const browsers = program.browserslist
-    const postcssPlugins = loader => [
-      require(`postcss-import`)({ root: loader.resourcePath }),
-      require(`postcss-cssnext`)({
-        browsers,
-        features: {
-          rem: false, // only needed for <= ie8
-          autoprefixer: false, // handled already
-        },
-      }),
-      require(`postcss-browser-reporter`),
-      require(`postcss-reporter`),
-    ]
-
-    const cssRule = rules.css({ plugins: postcssPlugins })
-    const cssModulesRule = rules.cssModules({
-      plugins: postcssPlugins,
-    })
-
     // Common config for every env.
     // prettier-ignore
     let configRules = [
       rules.js(),
       rules.yaml(),
-      rules.assets(),
+      rules.fonts(),
       rules.images(),
+      rules.audioVideo(),
     ]
-
     switch (stage) {
       case `develop`:
-        configRules = configRules.concat([cssRule, cssModulesRule])
-        break
-
-      case `build-css`:
-        configRules = configRules.concat([cssRule, cssModulesRule])
+        configRules = configRules.concat([
+          {
+            oneOf: [rules.cssModules(), rules.css()],
+          },
+        ])
         break
 
       case `build-html`:
@@ -350,21 +293,39 @@ module.exports = async (
         // prettier-ignore
         configRules = configRules.concat([
           {
-            ...cssRule,
-            use: loaders.null,
+            oneOf: [
+              rules.cssModules(),
+              {
+                ...rules.css(),
+                use: [loaders.null()],
+              },
+            ],
           },
-          cssModulesRule,
         ])
         break
 
       case `build-javascript`:
-        // we don't deal with css at all when building the javascript.  but
-        // still need to process the css so offline-plugin knows about the
-        // various assets referenced in your css.
+        // We don't deal with CSS at all when building JavaScript but we still
+        // need to process the CSS so offline-plugin knows about the various
+        // assets referenced in your CSS.
         //
         // It's also necessary to process CSS Modules so your JS knows the
         // classNames to use.
-        configRules = configRules.concat([cssRule, cssModulesRule])
+        configRules = configRules.concat([
+          {
+            oneOf: [rules.cssModules(), rules.css()],
+          },
+
+          // Remove manually unused React Router modules. Try removing these
+          // rules whenever they get around to making a new release with their
+          // tree shaking fixes.
+          { test: /HashHistory/, use: `null-loader` },
+          { test: /MemoryHistory/, use: `null-loader` },
+          { test: /StaticRouter/, use: `null-loader` },
+          { test: /MemoryRouter/, use: `null-loader` },
+          { test: /HashRouter/, use: `null-loader` },
+        ])
+
         break
     }
 
@@ -382,9 +343,8 @@ module.exports = async (
       // directory if you need to install a specific version of a module for a
       // part of your site.
       modules: [
-        `node_modules`,
+        directoryPath(path.join(`src`, `node_modules`)),
         directoryPath(`node_modules`),
-        directoryPath(`node_modules`, `gatsby/node_modules`),
       ],
     }
   }
@@ -398,10 +358,8 @@ module.exports = async (
       if (fs.statSync(userLoaderDirectoryPath).isDirectory()) {
         root.push(userLoaderDirectoryPath)
       }
-    } catch (e) {
-      if (e && e.code !== `ENOENT`) {
-        console.log(e)
-      }
+    } catch (err) {
+      debug(`Error resolving user loaders directory`, err)
     }
 
     return {
@@ -425,6 +383,12 @@ module.exports = async (
     target: stage === `build-html` || stage === `develop-html` ? `node` : `web`,
     profile: stage === `production`,
     devtool: getDevtool(),
+    // Turn off performance hints as we (for now) don't want to show the normal
+    // webpack output anywhere.
+    performance: {
+      hints: false,
+    },
+    mode: getMode(),
 
     resolveLoader: getResolveLoader(),
     resolve: getResolve(),
@@ -434,10 +398,21 @@ module.exports = async (
     },
   }
 
+  if (stage === `build-javascript`) {
+    config.optimization = {
+      runtimeChunk: {
+        name: `webpack-runtime`,
+      },
+      splitChunks: {
+        name: false,
+      },
+    }
+  }
+
   store.dispatch(actions.replaceWebpackConfig(config))
   const getConfig = () => store.getState().webpack
 
-  await apiRunnerNode(`modifyWebpackConfig`, {
+  await apiRunnerNode(`onCreateWebpackConfig`, {
     getConfig,
     stage,
     rules,
